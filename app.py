@@ -247,12 +247,12 @@ def image():
     img = img.resize((WIDTH, HEIGHT))
     draw = ImageDraw.Draw(img)
 
-    try:
-        font_title = ImageFont.truetype("arial.ttf", 40)
-        font_sub = ImageFont.truetype("arial.ttf", 20)
-        font_number = ImageFont.truetype("arial.ttf", 24)
-    except:
-        font_title = font_sub = font_number = ImageFont.load_default()
+    font_path = os.path.join("static", "fonts", "DejaVuSans.ttf")
+
+    font_title = ImageFont.truetype(font_path, 56)
+    font_sub = ImageFont.truetype(font_path, 32)
+    font_number = ImageFont.truetype(font_path, 38)
+
 
     # ===== TÍTULO ORIGINAL (PRESERVADO) =====
     title = "RIFA BENEFICENTE"
@@ -356,5 +356,6 @@ def lista_txt():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
