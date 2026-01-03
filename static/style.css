@@ -1,0 +1,6 @@
+.ticket-destaque {
+  border: 2px solid #d6b25e;
+  background-color: #fff9e6;
+  box-shadow: 0 0 10px rgba(214, 178, 94, 0.4);
+  transform: scale(1.02);
+}

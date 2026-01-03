@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rifa</title>
+
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #f6f6f6;
+    margin: 0;
+  }
+
+  header {
+    position: relative;
+    background: linear-gradient(135deg, #f7f3e8, #ffffff);
+    padding: 20px 14px 22px;
+    border-bottom: 2px solid #d6c9a6;
+  }
+
+  h1 {
+    font-size: 20px;
+    margin: 0 0 10px;
+    text-align: center;
+    font-weight: bold;
+    color: #3b3b3b;
+  }
+
+  .subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 12px;
+  }
+
+  /* ===== MENU HAMBURGUER ===== */
+  .menu-wrapper {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+  }
+
+  .menu-btn {
+    width: 36px;
+    height: 30px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .menu-btn span {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: #3b3b3b;
+    border-radius: 2px;
+    transition: all 0.3s ease;
+  }
+
+  .menu-btn span:nth-child(1) { top: 0; }
+  .menu-btn span:nth-child(2) { top: 50%; transform: translateY(-50%); }
+  .menu-btn span:nth-child(3) { bottom: 0; }
+
+  /* ☰ vira X */
+  .menu-btn.active span:nth-child(1) {
+    transform: rotate(45deg);
+    top: 50%;
+  }
+
+  .menu-btn.active span:nth-child(2) {
+    opacity: 0;
+  }
+
+  .menu-btn.active span:nth-child(3) {
+    transform: rotate(-45deg);
+    bottom: 50%;
+  }
+
+  .menu-dropdown {
+    position: absolute;
+    right: 0;
+    top: 38px;
+    background: #ffffff;
+    border: 1px solid #d6c9a6;
+    border-radius: 12px;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.15);
+    min-width: 170px;
+    overflow: hidden;
+
+    opacity: 0;
+    transform: translateY(-10px);
+    pointer-events: none;
+    transition: all 0.25s ease;
+    z-index: 1000;
+  }
+
+  .menu-dropdown.show {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .menu-item {
+    display: block;
+    width: 100%;
+    padding: 12px 14px;
+    background: none;
+    border: none;
+    text-align: left;
+    font-size: 14px;
+    cursor: pointer;
+    color: #3b3b3b;
+    text-decoration: none;
+  }
+
+  .menu-item:hover {
+    background: #f7f3e8;
+  }
+
+  /* ===== CARTELA NAV ===== */
+  .cartela-nav {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+
+  .cartela-label {
+    font-size: 14px;
+    font-weight: bold;
+    color: #3b3b3b;
+  }
+
+  /* ===== BUSCA ===== */
+  .search-box {
+    text-align: center;
+    margin-bottom: 14px;
+  }
+
+  .search-box input {
+    max-width: 180px;
+  }
+
+  /* ===== ACTIONS ===== */
+  .actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+
+  .btn {
+    padding: 8px 18px;
+    border-radius: 999px;
+    border: none;
+    background: #3b3b3b;
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .btn.light {
+    background: #efe6c8;
+    color: #3b3b3b;
+  }
+
+  /* ===== CONTAINER ===== */
+  .container {
+    padding: 14px;
+    max-width: 1100px;
+    margin: auto;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  @media (min-width: 500px) {
+    .grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  @media (min-width: 900px) {
+    .grid { grid-template-columns: repeat(6, 1fr); }
+  }
+
+  .card {
+    background: #fff;
+    border-radius: 14px;
+    padding: 12px;
+    border: 1px solid #ddd;
+    text-align: center;
+    position: relative;
+  }
+
+  .number {
+    font-size: 22px;
+    font-weight: bold;
+    margin-bottom: 6px;
+  }
+
+  .sold-x {
+    position: absolute;
+    inset: 0;
+    font-size: 48px;
+    color: red;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0.85;
+  }
+
+  input {
+    width: 85%;
+    padding: 8px 10px;
+    margin: 0 auto 6px;
+    display: block;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 13px;
+  }
+
+  .buyer {
+    font-size: 12px;
+    margin: 6px 0 8px;
+    color: #555;
+    font-style: italic;
+    word-break: break-word;
+  }
+
+  button {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: none;
+    background: #111;
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .card button.btn.light {
+    width: 100%;
+  }
+
+  .card.destaque {
+    border: 2px solid #d6b25e;
+    background: #fff9e6;
+    box-shadow: 0 0 10px rgba(214, 178, 94, 0.45);
+  }
+</style>
+</head>
+
+<body>
+
+<header>
+  <!-- MENU -->
+  <div class="menu-wrapper">
+    <button class="menu-btn" id="menuBtn" onclick="toggleMenu()">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+
+    <div class="menu-dropdown" id="menuDropdown">
+      <form method="post" action="/reset_rifa"
+            onsubmit="return confirm('Tem certeza que deseja iniciar uma NOVA RIFA? Todas as vendas serão apagadas.');">
+        <button type="submit" class="menu-item">🔄 Nova Rifa</button>
+      </form>
+      <a href="/logout" class="menu-item">🚪 Sair</a>
+    </div>
+  </div>
+
+  <h1>
+    Rifa Beneficente<br>
+    Casa NZO NDANDALUNDA
+  </h1>
+
+  <div class="subtitle">
+    Cartela {{ cartela }} · {{ sold_count }} de 60 números vendidos<br>
+    Números {{ cartela_start }} a {{ cartela_end }}
+  </div>
+
+  <div class="cartela-nav">
+    {% if cartela > 1 %}
+      <a href="/?cartela={{ cartela - 1 }}" class="btn light">⬅️ Anterior</a>
+    {% endif %}
+
+    <span class="cartela-label">Cartela {{ cartela }}</span>
+
+    {% if cartela < last_cartela %}
+      <a href="/?cartela={{ cartela + 1 }}" class="btn light">Próxima ➡️</a>
+    {% endif %}
+
+    <form method="post" action="/nova_cartela">
+      <button type="submit" class="btn light">➕ Nova cartela</button>
+    </form>
+  </div>
+
+  <div class="search-box">
+    <input type="number" id="searchNumber" placeholder="🔍 Buscar número" oninput="filterNumbers()">
+  </div>
+
+  <div class="actions">
+    <a href="/image?from={{ cartela_start }}&to={{ cartela_end }}" class="btn light">🖼️ Cartela</a>
+    <a href="/lista_txt?cartela={{ cartela }}" class="btn light">📄 Lista TXT</a>
+  </div>
+</header>
+
+<div class="container">
+  <div class="grid">
+    {% for t in tickets %}
+      <div class="card" id="ticket-{{ t.number }}">
+        <div class="number">{{ t.number }}</div>
+
+        {% if t.sold %}
+          <div class="sold-x">✖</div>
+          <div class="buyer">👤 {{ t.buyer_name }}</div>
+          <form method="post" action="/unsell">
+            <input type="hidden" name="number" value="{{ t.number }}">
+            <button type="submit" class="btn light">Desfazer</button>
+          </form>
+        {% else %}
+          <form method="post" action="/sell">
+            <input type="hidden" name="number" value="{{ t.number }}">
+            <input type="text" name="buyer_name" placeholder="Nome do comprador" required>
+            <button type="submit">Marcar vendido</button>
+          </form>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+function toggleMenu() {
+  document.getElementById("menuDropdown").classList.toggle("show");
+  document.getElementById("menuBtn").classList.toggle("active");
+}
+
+document.addEventListener("click", function(event) {
+  const menu = document.getElementById("menuDropdown");
+  const button = document.getElementById("menuBtn");
+
+  if (!menu.contains(event.target) && !button.contains(event.target)) {
+    menu.classList.remove("show");
+    button.classList.remove("active");
+  }
+});
+
+function filterNumbers() {
+  const value = document.getElementById("searchNumber").value.trim();
+  const cards = document.querySelectorAll(".card");
+
+  cards.forEach(card => {
+    card.classList.remove("destaque");
+    card.style.display = value ? "none" : "block";
+  });
+
+  if (!value) return;
+
+  const target = document.getElementById(`ticket-${value}`);
+  if (target) {
+    target.style.display = "block";
+    target.classList.add("destaque");
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+</script>
+
+</body>
+</html>
