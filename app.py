@@ -250,8 +250,8 @@ def image():
     font_path = os.path.join("static", "fonts", "DejaVuSans.ttf")
 
     font_title = ImageFont.truetype(font_path, 56)
-    font_sub = ImageFont.truetype(font_path, 32)
-    font_number = ImageFont.truetype(font_path, 38)
+    font_sub = ImageFont.truetype(font_path, 30)
+    font_number = ImageFont.truetype(font_path, 30)
 
 
     # ===== TÍTULO ORIGINAL (PRESERVADO) =====
@@ -356,6 +356,7 @@ def lista_txt():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
