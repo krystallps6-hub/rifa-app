@@ -1,5 +1,6 @@
 import os
-import sqlite3
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from datetime import timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, send_file, flash
 from PIL import Image, ImageDraw, ImageFont
@@ -9,7 +10,7 @@ import math
 # ---------------- CONFIG ----------------
 
 APP_PASSWORD = os.environ.get("RIFA_PASSWORD", "rifa2025")
-DB_PATH = "rifa.db"
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 CARTELA_SIZE = 60
 
@@ -20,9 +21,11 @@ app.permanent_session_lifetime = timedelta(hours=12)
 # ---------------- DB ----------------
 
 def db_conn():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    return psycopg2.connect(
+        DATABASE_URL,
+        cursor_factory=RealDictCursor,
+        sslmode="require"
+    )
 
 def init_db():
     conn = db_conn()
@@ -32,24 +35,24 @@ def init_db():
         CREATE TABLE IF NOT EXISTS tickets (
             number INTEGER PRIMARY KEY,
             buyer_name TEXT,
-            sold INTEGER NOT NULL DEFAULT 0
+            sold BOOLEAN NOT NULL DEFAULT FALSE
         )
     """)
 
     # Garante pelo menos a primeira cartela (1 a 60)
     for n in range(1, CARTELA_SIZE + 1):
-        cur.execute(
-            "INSERT OR IGNORE INTO tickets(number, buyer_name, sold) VALUES (?, '', 0)",
-            (n,)
-        )
+        cur.execute("""
+            INSERT INTO tickets (number, buyer_name, sold)
+            VALUES (%s, '', FALSE)
+            ON CONFLICT (number) DO NOTHING
+        """, (n,))
 
     conn.commit()
     conn.close()
 
-@app.before_request
+@app.before_first_request
 def ensure_db():
-    if not os.path.exists(DB_PATH):
-        init_db()
+    init_db()
 
 def logged_in():
     return session.get("logged_in") is True
@@ -59,10 +62,10 @@ def logged_in():
 def get_last_number():
     conn = db_conn()
     cur = conn.cursor()
-    cur.execute("SELECT MAX(number) FROM tickets")
-    max_number = cur.fetchone()[0] or 0
+    cur.execute("SELECT MAX(number) AS max FROM tickets")
+    result = cur.fetchone()
     conn.close()
-    return max_number
+    return result["max"] or 0
 
 def get_last_cartela():
     return math.ceil(get_last_number() / CARTELA_SIZE) or 1
@@ -101,17 +104,19 @@ def index():
     conn = db_conn()
     cur = conn.cursor()
 
-    cur.execute(
-        "SELECT * FROM tickets WHERE number BETWEEN ? AND ? ORDER BY number",
-        (start, end)
-    )
+    cur.execute("""
+        SELECT * FROM tickets
+        WHERE number BETWEEN %s AND %s
+        ORDER BY number
+    """, (start, end))
     tickets = cur.fetchall()
 
-    cur.execute(
-        "SELECT COUNT(*) FROM tickets WHERE sold = 1 AND number BETWEEN ? AND ?",
-        (start, end)
-    )
-    sold_count = cur.fetchone()[0]
+    cur.execute("""
+        SELECT COUNT(*) AS total
+        FROM tickets
+        WHERE sold = TRUE AND number BETWEEN %s AND %s
+    """, (start, end))
+    sold_count = cur.fetchone()["total"]
 
     conn.close()
 
@@ -140,15 +145,16 @@ def nova_cartela():
     cur = conn.cursor()
 
     for n in range(start, end + 1):
-        cur.execute(
-            "INSERT INTO tickets(number, buyer_name, sold) VALUES (?, '', 0)",
-            (n,)
-        )
+        cur.execute("""
+            INSERT INTO tickets (number, buyer_name, sold)
+            VALUES (%s, '', FALSE)
+        """, (n,))
 
     conn.commit()
     conn.close()
 
     return redirect(url_for("index", cartela=get_last_cartela()))
+
 # ---------------- RESET RIFA ----------------
 
 @app.route("/reset_rifa", methods=["POST"])
@@ -159,15 +165,13 @@ def reset_rifa():
     conn = db_conn()
     cur = conn.cursor()
 
-    # Apaga TODOS os tickets
     cur.execute("DELETE FROM tickets")
 
-    # Recria apenas a primeira cartela (1 a 60)
-    for n in range(1, 61):
-        cur.execute(
-            "INSERT INTO tickets(number, buyer_name, sold) VALUES (?, '', 0)",
-            (n,)
-        )
+    for n in range(1, CARTELA_SIZE + 1):
+        cur.execute("""
+            INSERT INTO tickets (number, buyer_name, sold)
+            VALUES (%s, '', FALSE)
+        """, (n,))
 
     conn.commit()
     conn.close()
@@ -183,10 +187,11 @@ def sell():
 
     conn = db_conn()
     cur = conn.cursor()
-    cur.execute(
-        "UPDATE tickets SET sold=1, buyer_name=? WHERE number=?",
-        (name, number)
-    )
+    cur.execute("""
+        UPDATE tickets
+        SET sold = TRUE, buyer_name = %s
+        WHERE number = %s
+    """, (name, number))
     conn.commit()
     conn.close()
 
@@ -198,14 +203,16 @@ def unsell():
 
     conn = db_conn()
     cur = conn.cursor()
-    cur.execute(
-        "UPDATE tickets SET sold=0, buyer_name='' WHERE number=?",
-        (number,)
-    )
+    cur.execute("""
+        UPDATE tickets
+        SET sold = FALSE, buyer_name = ''
+        WHERE number = %s
+    """, (number,))
     conn.commit()
     conn.close()
 
     return redirect(request.referrer)
+
 # ---------------- IMAGE (CARTELA) ----------------
 
 @app.route("/image")
