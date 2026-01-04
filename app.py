@@ -1,11 +1,17 @@
 import os
+import math
+import io
+from datetime import timedelta
+
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from datetime import timedelta
-from flask import Flask, render_template, request, redirect, url_for, session, send_file, flash
+
+from flask import (
+    Flask, render_template, request, redirect,
+    url_for, session, send_file, flash
+)
+
 from PIL import Image, ImageDraw, ImageFont
-import io
-import math
 
 # ---------------- CONFIG ----------------
 
@@ -21,11 +27,7 @@ app.permanent_session_lifetime = timedelta(hours=12)
 # ---------------- DB ----------------
 
 def db_conn():
-    return psycopg2.connect(
-        DATABASE_URL,
-        cursor_factory=RealDictCursor,
-        sslmode="require"
-    )
+    return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
 def init_db():
     conn = db_conn()
@@ -39,7 +41,7 @@ def init_db():
         )
     """)
 
-    # Garante pelo menos a primeira cartela (1 a 60)
+    # Garante a primeira cartela (1 a 60)
     for n in range(1, CARTELA_SIZE + 1):
         cur.execute("""
             INSERT INTO tickets (number, buyer_name, sold)
@@ -50,9 +52,15 @@ def init_db():
     conn.commit()
     conn.close()
 
-@app.before_first_request
+# roda APENAS UMA VEZ
+db_initialized = False
+
+@app.before_request
 def ensure_db():
-    init_db()
+    global db_initialized
+    if not db_initialized:
+        init_db()
+        db_initialized = True
 
 def logged_in():
     return session.get("logged_in") is True
@@ -62,10 +70,10 @@ def logged_in():
 def get_last_number():
     conn = db_conn()
     cur = conn.cursor()
-    cur.execute("SELECT MAX(number) AS max FROM tickets")
-    result = cur.fetchone()
+    cur.execute("SELECT MAX(number) FROM tickets")
+    max_number = cur.fetchone()["max"] or 0
     conn.close()
-    return result["max"] or 0
+    return max_number
 
 def get_last_cartela():
     return math.ceil(get_last_number() / CARTELA_SIZE) or 1
@@ -112,11 +120,10 @@ def index():
     tickets = cur.fetchall()
 
     cur.execute("""
-        SELECT COUNT(*) AS total
-        FROM tickets
+        SELECT COUNT(*) FROM tickets
         WHERE sold = TRUE AND number BETWEEN %s AND %s
     """, (start, end))
-    sold_count = cur.fetchone()["total"]
+    sold_count = cur.fetchone()["count"]
 
     conn.close()
 
@@ -187,11 +194,13 @@ def sell():
 
     conn = db_conn()
     cur = conn.cursor()
+
     cur.execute("""
         UPDATE tickets
         SET sold = TRUE, buyer_name = %s
         WHERE number = %s
     """, (name, number))
+
     conn.commit()
     conn.close()
 
@@ -203,11 +212,13 @@ def unsell():
 
     conn = db_conn()
     cur = conn.cursor()
+
     cur.execute("""
         UPDATE tickets
         SET sold = FALSE, buyer_name = ''
         WHERE number = %s
     """, (number,))
+
     conn.commit()
     conn.close()
 
@@ -225,11 +236,14 @@ def image():
 
     conn = db_conn()
     cur = conn.cursor()
-    cur.execute(
-        "SELECT * FROM tickets WHERE number BETWEEN ? AND ? ORDER BY number",
-        (start, end)
-    )
+
+    cur.execute("""
+        SELECT * FROM tickets
+        WHERE number BETWEEN %s AND %s
+        ORDER BY number
+    """, (start, end))
     tickets = cur.fetchall()
+
     conn.close()
 
     COLS = 10
@@ -255,16 +269,14 @@ def image():
     draw = ImageDraw.Draw(img)
 
     FONTS = {
-	"title": os.path.join("static", "fonts", "PlayfairDisplay-Regular.ttf"),
-    	"numbers": os.path.join("static", "fonts", "Montserrat-Regular.ttf"),
+        "title": os.path.join("static", "fonts", "PlayfairDisplay-Regular.ttf"),
+        "numbers": os.path.join("static", "fonts", "Montserrat-Regular.ttf"),
     }
 
     font_title = ImageFont.truetype(FONTS["title"], 50)
     font_sub = ImageFont.truetype(FONTS["title"], 26)
     font_number = ImageFont.truetype(FONTS["numbers"], 30)
 
-
-    # ===== TÍTULO ORIGINAL (PRESERVADO) =====
     title = "RIFA BENEFICENTE"
     subtitle = "Casa NZÓ DANDALUNDA"
     price = f"Números {start} a {end}"
@@ -318,7 +330,8 @@ def image():
         as_attachment=True,
         download_name=f"rifa_{start}_{end}.png"
     )
-# ---------------- LISTA TXT (POR CARTELA) ----------------
+
+# ---------------- LISTA TXT ----------------
 
 @app.route("/lista_txt")
 def lista_txt():
@@ -330,11 +343,15 @@ def lista_txt():
 
     conn = db_conn()
     cur = conn.cursor()
-    cur.execute(
-        "SELECT number, buyer_name FROM tickets WHERE number BETWEEN ? AND ? ORDER BY number",
-        (start, end)
-    )
+
+    cur.execute("""
+        SELECT number, buyer_name
+        FROM tickets
+        WHERE number BETWEEN %s AND %s
+        ORDER BY number
+    """, (start, end))
     rows = cur.fetchall()
+
     conn.close()
 
     lines = []
@@ -366,8 +383,3 @@ def lista_txt():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-
-
-
-
-
