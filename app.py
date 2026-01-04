@@ -4,7 +4,6 @@ import io
 from datetime import timedelta
 
 import psycopg2
-from psycopg2.pool import SimpleConnectionPool
 from psycopg2.extras import RealDictCursor
 
 from flask import (
@@ -25,31 +24,14 @@ app = Flask(__name__)
 app.secret_key = "chave-super-secreta"
 app.permanent_session_lifetime = timedelta(hours=12)
 
-# ---------------- DB (POOL) ----------------
-
-db_pool = SimpleConnectionPool(
-    minconn=1,
-    maxconn=5,
-    dsn=DATABASE_URL,
-    sslmode="require"
-)
+# ---------------- DB (SEM POOL) ----------------
 
 def db_conn():
-    try:
-        return db_pool.getconn()
-    except psycopg2.OperationalError:
-        db_pool.closeall()
-        return psycopg2.connect(
-            DATABASE_URL,
-            sslmode="require",
-            cursor_factory=RealDictCursor
-        )
-
-def db_close(conn):
-    try:
-        db_pool.putconn(conn)
-    except Exception:
-        pass
+    return psycopg2.connect(
+        DATABASE_URL,
+        sslmode="require",
+        cursor_factory=RealDictCursor
+    )
 
 def init_db():
     conn = db_conn()
@@ -72,7 +54,7 @@ def init_db():
 
     conn.commit()
     cur.close()
-    db_close(conn)
+    conn.close()
 
 # roda apenas uma vez
 db_initialized = False
@@ -93,9 +75,9 @@ def get_last_number():
     conn = db_conn()
     cur = conn.cursor()
     cur.execute("SELECT COALESCE(MAX(number), 0) FROM tickets")
-    value = cur.fetchone()[0]
+    value = cur.fetchone()["coalesce"]
     cur.close()
-    db_close(conn)
+    conn.close()
     return value
 
 def get_last_cartela():
@@ -133,7 +115,7 @@ def index():
     start, end = cartela_range(cartela)
 
     conn = db_conn()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor()
 
     cur.execute("""
         SELECT * FROM tickets
@@ -143,13 +125,14 @@ def index():
     tickets = cur.fetchall()
 
     cur.execute("""
-        SELECT COUNT(*) FROM tickets
+        SELECT COUNT(*) AS count
+        FROM tickets
         WHERE sold = TRUE AND number BETWEEN %s AND %s
     """, (start, end))
     sold_count = cur.fetchone()["count"]
 
     cur.close()
-    db_close(conn)
+    conn.close()
 
     return render_template(
         "index.html",
@@ -183,7 +166,7 @@ def nova_cartela():
 
     conn.commit()
     cur.close()
-    db_close(conn)
+    conn.close()
 
     return redirect(url_for("index", cartela=get_last_cartela()))
 
@@ -207,7 +190,7 @@ def reset_rifa():
 
     conn.commit()
     cur.close()
-    db_close(conn)
+    conn.close()
 
     return redirect(url_for("index"))
 
@@ -229,7 +212,7 @@ def sell():
 
     conn.commit()
     cur.close()
-    db_close(conn)
+    conn.close()
 
     return redirect(request.referrer)
 
@@ -248,7 +231,7 @@ def unsell():
 
     conn.commit()
     cur.close()
-    db_close(conn)
+    conn.close()
 
     return redirect(request.referrer)
 
@@ -263,7 +246,7 @@ def image():
     end = int(request.args.get("to"))
 
     conn = db_conn()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor()
 
     cur.execute("""
         SELECT * FROM tickets
@@ -273,7 +256,7 @@ def image():
     tickets = cur.fetchall()
 
     cur.close()
-    db_close(conn)
+    conn.close()
 
     COLS = 10
     CELL = 68
@@ -301,7 +284,6 @@ def image():
     font_sub = ImageFont.truetype(FONTS["title"], 26)
     font_number = ImageFont.truetype(FONTS["numbers"], 38)
 
-    # título preservado
     title = "RIFA BENEFICENTE"
     subtitle = "Casa NZÓ DANDALUNDA"
     price = f"Números {start} a {end}"
@@ -367,7 +349,7 @@ def lista_txt():
     start, end = cartela_range(cartela)
 
     conn = db_conn()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor()
 
     cur.execute("""
         SELECT number, buyer_name
@@ -378,7 +360,7 @@ def lista_txt():
     rows = cur.fetchall()
 
     cur.close()
-    db_close(conn)
+    conn.close()
 
     lines = []
     for r in rows:
@@ -408,5 +390,3 @@ def lista_txt():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-
-
