@@ -4,6 +4,7 @@ import io
 from datetime import timedelta
 
 import psycopg2
+from psycopg2.pool import SimpleConnectionPool
 from psycopg2.extras import RealDictCursor
 
 from flask import (
@@ -24,10 +25,19 @@ app = Flask(__name__)
 app.secret_key = "chave-super-secreta"
 app.permanent_session_lifetime = timedelta(hours=12)
 
-# ---------------- DB ----------------
+# ---------------- DB (POOL) ----------------
+
+db_pool = SimpleConnectionPool(
+    minconn=1,
+    maxconn=5,
+    dsn=DATABASE_URL
+)
 
 def db_conn():
-    return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    return db_pool.getconn()
+
+def db_close(conn):
+    db_pool.putconn(conn)
 
 def init_db():
     conn = db_conn()
@@ -41,7 +51,6 @@ def init_db():
         )
     """)
 
-    # Garante a primeira cartela (1 a 60)
     for n in range(1, CARTELA_SIZE + 1):
         cur.execute("""
             INSERT INTO tickets (number, buyer_name, sold)
@@ -50,9 +59,10 @@ def init_db():
         """, (n,))
 
     conn.commit()
-    conn.close()
+    cur.close()
+    db_close(conn)
 
-# roda APENAS UMA VEZ
+# roda apenas uma vez
 db_initialized = False
 
 @app.before_request
@@ -70,10 +80,11 @@ def logged_in():
 def get_last_number():
     conn = db_conn()
     cur = conn.cursor()
-    cur.execute("SELECT MAX(number) FROM tickets")
-    max_number = cur.fetchone()["max"] or 0
-    conn.close()
-    return max_number
+    cur.execute("SELECT COALESCE(MAX(number), 0) FROM tickets")
+    value = cur.fetchone()[0]
+    cur.close()
+    db_close(conn)
+    return value
 
 def get_last_cartela():
     return math.ceil(get_last_number() / CARTELA_SIZE) or 1
@@ -110,7 +121,7 @@ def index():
     start, end = cartela_range(cartela)
 
     conn = db_conn()
-    cur = conn.cursor()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
 
     cur.execute("""
         SELECT * FROM tickets
@@ -125,7 +136,8 @@ def index():
     """, (start, end))
     sold_count = cur.fetchone()["count"]
 
-    conn.close()
+    cur.close()
+    db_close(conn)
 
     return render_template(
         "index.html",
@@ -158,7 +170,8 @@ def nova_cartela():
         """, (n,))
 
     conn.commit()
-    conn.close()
+    cur.close()
+    db_close(conn)
 
     return redirect(url_for("index", cartela=get_last_cartela()))
 
@@ -181,7 +194,8 @@ def reset_rifa():
         """, (n,))
 
     conn.commit()
-    conn.close()
+    cur.close()
+    db_close(conn)
 
     return redirect(url_for("index"))
 
@@ -202,7 +216,8 @@ def sell():
     """, (name, number))
 
     conn.commit()
-    conn.close()
+    cur.close()
+    db_close(conn)
 
     return redirect(request.referrer)
 
@@ -220,7 +235,8 @@ def unsell():
     """, (number,))
 
     conn.commit()
-    conn.close()
+    cur.close()
+    db_close(conn)
 
     return redirect(request.referrer)
 
@@ -235,7 +251,7 @@ def image():
     end = int(request.args.get("to"))
 
     conn = db_conn()
-    cur = conn.cursor()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
 
     cur.execute("""
         SELECT * FROM tickets
@@ -244,28 +260,24 @@ def image():
     """, (start, end))
     tickets = cur.fetchall()
 
-    conn.close()
+    cur.close()
+    db_close(conn)
 
     COLS = 10
     CELL = 68
-    total = len(tickets)
-    ROWS = (total + COLS - 1) // COLS
+    ROWS = (len(tickets) + COLS - 1) // COLS
 
     MARGIN_X = 90
     HEADER_HEIGHT = 280
-    GAP_AFTER_GRID = 40
     PRIZE_HEIGHT = 260
 
     WIDTH = MARGIN_X * 2 + COLS * CELL
-    HEIGHT = HEADER_HEIGHT + ROWS * CELL + GAP_AFTER_GRID + PRIZE_HEIGHT + 40
+    HEIGHT = HEADER_HEIGHT + ROWS * CELL + PRIZE_HEIGHT + 40
 
-    TEXT_COLOR = "#2b2b2b"
-    BORDER_COLOR = "#b8aa84"
-    X_COLOR = "#c62828"
+    img = Image.open(
+        os.path.join("static", "backgrounds", "fundo_base_2.png")
+    ).resize((WIDTH, HEIGHT))
 
-    background_path = os.path.join("static", "backgrounds", "fundo_base_2.png")
-    img = Image.open(background_path).convert("RGB")
-    img = img.resize((WIDTH, HEIGHT))
     draw = ImageDraw.Draw(img)
 
     FONTS = {
@@ -275,20 +287,21 @@ def image():
 
     font_title = ImageFont.truetype(FONTS["title"], 50)
     font_sub = ImageFont.truetype(FONTS["title"], 26)
-    font_number = ImageFont.truetype(FONTS["numbers"], 30)
+    font_number = ImageFont.truetype(FONTS["numbers"], 38)
 
+    # título preservado
     title = "RIFA BENEFICENTE"
     subtitle = "Casa NZÓ DANDALUNDA"
     price = f"Números {start} a {end}"
 
-    tw = draw.textbbox((0, 0), title, font=font_title)[2]
-    draw.text(((WIDTH - tw) / 2, 70), title, fill=TEXT_COLOR, font=font_title)
+    draw.text(((WIDTH - draw.textbbox((0,0), title, font=font_title)[2]) / 2, 70),
+              title, fill="#2b2b2b", font=font_title)
 
-    sw = draw.textbbox((0, 0), subtitle, font=font_sub)[2]
-    draw.text(((WIDTH - sw) / 2, 125), subtitle, fill=TEXT_COLOR, font=font_sub)
+    draw.text(((WIDTH - draw.textbbox((0,0), subtitle, font=font_sub)[2]) / 2, 125),
+              subtitle, fill="#2b2b2b", font=font_sub)
 
-    pw = draw.textbbox((0, 0), price, font=font_sub)[2]
-    draw.text(((WIDTH - pw) / 2, 155), price, fill=TEXT_COLOR, font=font_sub)
+    draw.text(((WIDTH - draw.textbbox((0,0), price, font=font_sub)[2]) / 2, 155),
+              price, fill="#2b2b2b", font=font_sub)
 
     start_y = HEADER_HEIGHT + 30
 
@@ -301,7 +314,7 @@ def image():
 
         draw.rectangle(
             [x + 6, y + 6, x + CELL - 6, y + CELL - 6],
-            outline=BORDER_COLOR,
+            outline="#b8aa84",
             width=2
         )
 
@@ -313,12 +326,12 @@ def image():
         cx = x + CELL / 2
         cy = y + CELL / 2
 
-        draw.text((cx - w / 2, cy - h / 2), text, fill=TEXT_COLOR, font=font_number)
+        draw.text((cx - w / 2, cy - h / 2), text, fill="#2b2b2b", font=font_number)
 
         if t["sold"]:
             size = CELL * 0.20
-            draw.line([cx - size, cy - size, cx + size, cy + size], fill=X_COLOR, width=3)
-            draw.line([cx + size, cy - size, cx - size, cy + size], fill=X_COLOR, width=3)
+            draw.line([cx - size, cy - size, cx + size, cy + size], fill="#c62828", width=3)
+            draw.line([cx + size, cy - size, cx - size, cy + size], fill="#c62828", width=3)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -342,7 +355,7 @@ def lista_txt():
     start, end = cartela_range(cartela)
 
     conn = db_conn()
-    cur = conn.cursor()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
 
     cur.execute("""
         SELECT number, buyer_name
@@ -352,7 +365,8 @@ def lista_txt():
     """, (start, end))
     rows = cur.fetchall()
 
-    conn.close()
+    cur.close()
+    db_close(conn)
 
     lines = []
     for r in rows:
@@ -360,12 +374,11 @@ def lista_txt():
         name = r["buyer_name"].strip()
         lines.append(f"{num} — {name}" if name else f"{num} —")
 
-    header = (
+    content = (
         f"🎟️ RIFA — CARTELA {cartela}\n"
         f"Números {start} a {end}\n\n"
+        + "\n".join(lines)
     )
-
-    content = header + "\n".join(lines)
 
     buf = io.BytesIO()
     buf.write(content.encode("utf-8"))
