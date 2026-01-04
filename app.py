@@ -247,16 +247,19 @@ def image():
     img = img.resize((WIDTH, HEIGHT))
     draw = ImageDraw.Draw(img)
 
-    font_path = os.path.join("static", "fonts", "DejaVuSans.ttf")
+    FONTS = {
+	"title": os.path.join("static", "fonts", "PlayfairDisplay-Regular.ttf"),
+    	"numbers": os.path.join("static", "fonts", "Montserrat-Regular.ttf"),
+    }
 
-    font_title = ImageFont.truetype(font_path, 50)
-    font_sub = ImageFont.truetype(font_path, 26)
-    font_number = ImageFont.truetype(font_path, 24)
+    font_title = ImageFont.truetype(FONTS["title"], 50)
+    font_sub = ImageFont.truetype(FONTS["title"], 26)
+    font_number = ImageFont.truetype(FONTS["numbers"], 30)
 
 
     # ===== TÍTULO ORIGINAL (PRESERVADO) =====
     title = "RIFA BENEFICENTE"
-    subtitle = "Casa NZO NDANDALUNDA"
+    subtitle = "Casa NZÓ DANDALUNDA"
     price = f"Números {start} a {end}"
 
     tw = draw.textbbox((0, 0), title, font=font_title)[2]
@@ -356,7 +359,6 @@ def lista_txt():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-
 
 
 
