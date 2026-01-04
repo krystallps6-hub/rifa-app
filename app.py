@@ -31,13 +31,25 @@ db_pool = SimpleConnectionPool(
     minconn=1,
     maxconn=5,
     dsn=DATABASE_URL
+    sslmode="require"
 )
 
 def db_conn():
-    return db_pool.getconn()
+    try:
+        return db_pool.getconn()
+    except psycopg2.OperationalError:
+        db_pool.closeall()
+        return psycopg2.connect(
+            DATABASE_URL,
+            sslmode="require",
+            cursor_factory=RealDictCursor
+        )
 
 def db_close(conn):
-    db_pool.putconn(conn)
+    try:
+        db_pool.putconn(conn)
+    except Exception:
+        pass
 
 def init_db():
     conn = db_conn()
@@ -396,3 +408,4 @@ def lista_txt():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
