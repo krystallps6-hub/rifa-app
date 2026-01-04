@@ -30,7 +30,7 @@ app.permanent_session_lifetime = timedelta(hours=12)
 db_pool = SimpleConnectionPool(
     minconn=1,
     maxconn=5,
-    dsn=DATABASE_URL
+    dsn=DATABASE_URL,
     sslmode="require"
 )
 
@@ -408,4 +408,5 @@ def lista_txt():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
